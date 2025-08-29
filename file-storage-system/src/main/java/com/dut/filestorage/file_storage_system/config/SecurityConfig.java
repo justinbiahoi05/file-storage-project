@@ -25,6 +25,8 @@ public class SecurityConfig {
                 //Phân quyền cho các yêu cầu HTTP
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // === THÊM DÒNG NÀY VÀO ===
+                        .requestMatchers("/api/files/**").permitAll() 
                         .anyRequest().authenticated()
                 );
 

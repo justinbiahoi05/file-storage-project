@@ -11,7 +11,7 @@ public class FileVersion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "VersionID")
+    @Column(name = "version_id")
     private Long id;
 
     @Column(name = "version_number", nullable = false)
