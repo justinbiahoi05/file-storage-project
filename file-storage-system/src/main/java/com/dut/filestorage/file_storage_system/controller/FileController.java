@@ -1,66 +1,64 @@
 package com.dut.filestorage.file_storage_system.controller;
 
 import com.dut.filestorage.file_storage_system.entity.File;
-import com.dut.filestorage.file_storage_system.entity.User;
-import com.dut.filestorage.file_storage_system.repository.FileRepository;
-import com.dut.filestorage.file_storage_system.repository.UserRepository;
-import com.dut.filestorage.file_storage_system.service.FileStorageService;
+import com.dut.filestorage.file_storage_system.service.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.time.LocalDateTime;
-import java.util.Optional;
+import java.security.Principal;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
 
     @Autowired
-    private FileStorageService storageService;
+    private FileService fileService;
 
-    @Autowired
-    private FileRepository fileRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    // Cập nhật API upload để tích hợp CSDL
+    /**
+     * Endpoint để upload file.
+     * Chỉ người dùng đã xác thực mới có thể truy cập.
+     */
     @PostMapping("/upload")
-    public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file, 
-                                        @RequestParam("user_id") Long user_id) { // Tạm thời nhận userId để test
-        
-        // BƯỚC 1: Kiểm tra xem người dùng có tồn tại không
-        Optional<User> userOptional = userRepository.findById(user_id);
-        if (!userOptional.isPresent()) {
-            return ResponseEntity.badRequest().body("Error: User not found!");
-        }
-        User owner = userOptional.get();
-
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file, Principal principal) {
         try {
-            // BƯỚC 2: Gọi "kỹ sư kho vận" lưu file vật lý
-            String storedFileName = storageService.save(file);
-            String storedPath = "uploads/" + storedFileName;
-
-            // BƯỚC 3: Tạo "hồ sơ" cho file (tạo đối tượng File Entity)
-            File fileEntity = new File();
-            fileEntity.setFileName(file.getOriginalFilename());
-            fileEntity.setStoredPath(storedPath);
-            fileEntity.setFileSize(file.getSize());
-            fileEntity.setFileType(file.getContentType());
-            fileEntity.setUploadDate(LocalDateTime.now());
-            fileEntity.setOwner(owner); // Gán chủ sở hữu cho file
-
-            // BƯỚC 4: Lưu "hồ sơ" file vào CSDL
-            fileRepository.save(fileEntity);
-            
-            String message = "Uploaded the file successfully: " + file.getOriginalFilename();
-            return ResponseEntity.ok(message);
-
+            // Ủy quyền hoàn toàn cho FileService xử lý
+            fileService.uploadFile(file, principal.getName());
+            return ResponseEntity.ok("Uploaded the file successfully: " + file.getOriginalFilename());
         } catch (Exception e) {
-            String message = "Could not upload the file: " + file.getOriginalFilename() + ". Error: " + e.getMessage();
-            return ResponseEntity.internalServerError().body(message);
+            // Trả về lỗi kèm theo thông báo chi tiết từ Service
+            return ResponseEntity.badRequest().body("Could not upload the file. Error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint để lấy danh sách file của người dùng đang đăng nhập.
+     */
+    @GetMapping("/my-files")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<File>> getMyFiles(Principal principal) {
+        // Gọi service để lấy danh sách và trả về
+        List<File> files = fileService.getFilesByUsername(principal.getName());
+        return ResponseEntity.ok(files);
+    }
+
+    /**
+     * Endpoint để download một file cụ thể.
+     * Đã được sửa lại để tinh gọn hơn.
+     */
+    @GetMapping("/download/{fileId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> downloadFile(@PathVariable Long fileId, Principal principal) {
+        try {
+            // CHỈ CẦN MỘT DÒNG DUY NHẤT
+            // FileService đã đóng gói sẵn ResponseEntity, Controller chỉ việc trả nó về.
+            return fileService.downloadFile(fileId, principal.getName());
+        } catch (Exception e) {
+            // Nếu có lỗi (không tìm thấy file, không có quyền), trả về lỗi kèm thông báo
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 }
